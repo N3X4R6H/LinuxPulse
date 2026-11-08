@@ -7,6 +7,12 @@
 
 ---
 
+## How to run:
+./run.sh              # start with live data (Linux and macOS)
+./run.sh --demo       # force demo data (--mock and --interval 1 also work)
+./run.sh test         # run all unit tests
+./run.sh clean        # delete .venv to start fresh
+
 ## Overview
 
 **LINUXPULSE** is a desktop-based Linux system monitoring and performance analytics application designed to provide real-time visibility into system resource utilization and running processes.
