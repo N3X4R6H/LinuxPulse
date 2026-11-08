@@ -9,7 +9,7 @@ Pipeline (one background thread, GUI on the Tk main thread):
       -> queue.Queue -> gui.Dashboard                (Dhiren)   (charts: visualization/, Pavan)
 
 Usage:
-    python3 main.py                 # live data (Linux: reads /proc and top)
+    python3 main.py                 # live data (Linux: /proc + top · macOS: kernel stats, vm_stat, ps)
     python3 main.py --demo          # synthetic data through the same pipeline (any OS); alias: --mock
     python3 main.py --interval 1    # override config sampling interval (seconds)
 """
@@ -340,8 +340,8 @@ def main():
         cfg = replace(cfg, sampling_interval_seconds=max(0.5, args.interval))
 
     demo = args.demo
-    if not demo and not os.path.exists("/proc/stat"):
-        print("Live collection needs Linux (/proc). Starting in demo mode; use Linux for real data.",
+    if not demo and not (sys.platform.startswith("linux") or sys.platform == "darwin"):
+        print(f"Live collection supports Linux and macOS, not {sys.platform}. Starting in demo mode.",
               file=sys.stderr)
         demo = True
     if demo:

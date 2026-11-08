@@ -6,10 +6,10 @@ Dark, Netdata-style Tkinter dashboard. Runs on Linux (any distro, X11/Wayland) a
 ## Run the dashboard
 
 ```bash
-python3 main.py              # live data (Linux)
+python3 main.py              # live data (Linux and macOS)
 python3 main.py --demo       # synthetic data through the full pipeline, any OS (alias --mock)
 ```
-On macOS (no `/proc`) `main.py` starts in demo mode automatically. Demo data is generated in
+Live data works on Linux and macOS (the collector has a macOS path). Demo data is generated in
 `main.py` (`DemoCollector`) in the same shape as the collector's output, so the adapter, the
 analytics engine and the GUI all run exactly as on Linux.
 Needs Python 3.9+, Tk 8.6+ and matplotlib (`sudo apt install python3-tk` / `sudo pacman -S tk` /
