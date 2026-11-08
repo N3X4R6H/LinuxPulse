@@ -1,4 +1,10 @@
-"""Matplotlib figure objects for the dashboard (no Tkinter here).
+"""INTERIM visualization layer used by the GUI — visualization/ is Pavan's module.
+
+Kept here only so the dashboard runs on its own. Pavan may adopt or replace it; the GUI
+needs objects that expose ``.figure`` (a matplotlib Figure) and ``.update(...)`` with the
+signatures below (also listed in docs/gui_design.md, "Interfaces the GUI expects").
+
+Matplotlib figure objects for the dashboard (no Tkinter here).
 
 Each class owns a ``matplotlib.figure.Figure`` and exposes ``update(...)``.
 X axes are wall-clock times (epoch seconds formatted as HH:MM:SS).
@@ -58,7 +64,7 @@ def _window(ax, times, window):
 class StackedAreaPlot:
     """Stacked dimensions, e.g. CPU user/system/iowait/... or memory used/cache/free."""
 
-    def __init__(self, dims, window=120, ylim=(0, 100), ylabel="percentage", yfmt="{:.0f}"):
+    def __init__(self, dims, window=300, ylim=(0, 100), ylabel="percentage", yfmt="{:.0f}"):
         self.dims, self.window, self.ylim = dims, window, ylim
         self.hidden = set()
         self.figure = Figure(figsize=(6, 2.6), dpi=100, facecolor=THEME["face"], layout="constrained")
@@ -95,6 +101,7 @@ class StackedAreaPlot:
             line.set_data(times, top)
             base = [b if math.isnan(t) else t for b, t in zip(base, top)]
         self.empty.set_visible(not any_data)
+        self.empty.set_text("Unavailable" if n else "Waiting for data…")
         _window(ax, times, self.window)
         if ymax is not None:
             ax.set_ylim(0, ymax)
@@ -161,7 +168,7 @@ class AnalyticsGrid:
     SPECS = (("cpu", "CPU utilization", True), ("ram", "RAM utilization", True),
              ("swap", "SWAP utilization", True), ("load1", "System load (1 min)", False))
 
-    def __init__(self, colors, window=120):
+    def __init__(self, colors, window=300):
         self.window = window
         self.figure = Figure(figsize=(8, 6.4), dpi=100, facecolor=THEME["face"], layout="constrained")
         self.figure.get_layout_engine().set(w_pad=0.1, h_pad=0.1, hspace=0.07, wspace=0.05)
@@ -198,6 +205,7 @@ class AnalyticsGrid:
             vals = _vals(getattr(history, key))
             valid = p["s"].set(times, vals)
             p["empty"].set_visible(not valid)
+            p["empty"].set_text("Unavailable" if times else "Waiting for data…")
             ax = p["ax"]
             _window(ax, times, self.window)
             if valid:
