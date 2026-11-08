@@ -1,4 +1,4 @@
-# Unix System Monitor — GUI
+# Unix and linux System Monitor — GUI
 
 Netdata-style dark Tkinter dashboard (Introduction · Overview · Processes · Analytics).
 
