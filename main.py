@@ -1,4 +1,3 @@
-"""Entry point: python3 main.py   (Linux and macOS)"""
 import sys
 
 if sys.version_info < (3, 9):
@@ -15,7 +14,7 @@ except ImportError:
     sys.exit(f"Tkinter is not available for this Python ({sys.executable}).\n{hint}")
 
 try:
-    import matplotlib  # noqa: F401
+    import matplotlib  
 except ImportError:
     sys.exit(f"Matplotlib is missing. Run:  {sys.executable} -m pip install -r requirements.txt")
 
@@ -26,11 +25,6 @@ from gui.platform_support import tk_version_warning
 
 
 def make_source(demo=False, interval=1.0):
-    """Live `top` data on Linux/macOS; synthetic data with --demo or if top can't be used.
-
-    TEMPORARY: once the team's collector + analytics exist, return a source that wraps
-    them (see README, "Integrating the real backend").
-    """
     if not demo:
         try:
             if sys.platform.startswith("linux"):
