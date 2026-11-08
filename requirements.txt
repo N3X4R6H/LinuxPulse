@@ -1,1 +1,1 @@
-# No external Python dependencies are required.
+matplotlib>=3.7
