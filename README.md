@@ -1,118 +1,673 @@
-# Unix and linux System Monitor — GUI
+# LINUXPULSE
+### Real-Time Linux System Monitoring & Performance Analytics Dashboard
 
-Netdata-style dark Tkinter dashboard (Introduction · Overview · Processes · Analytics).
+<p align="center">
+  <strong>A lightweight, real-time system monitoring and performance analytics application for Linux.</strong>
+</p>
 
-**Data source:** by default it shows **live data from the machine it runs on**, read from `top`
-(`live/`, a temporary stand-in until the team's collector is wired in). `--demo` switches to
-synthetic data, shown with a `DEMO DATA` badge.
+---
 
-```bash
-./run.sh                    # live data (Linux: procps top · macOS: BSD top)
-./run.sh --demo             # synthetic demo data
-./run.sh --interval 2       # refresh every 2 s
-```
+## Overview
 
-| | Linux (`top -b -1`) | macOS (`top -l`) |
-|---|---|---|
-| CPU total + user/system | ✓ | ✓ |
-| nice / iowait / irq / softirq / steal | ✓ | — (not reported) |
-| Per-core utilization | ✓ | — (not reported) |
-| RAM used / free / buff-cache / available | ✓ | used / unused (no buff-cache) |
-| Swap, load average, uptime, tasks | ✓ | ✓ (swap via `sysctl`) |
-| Process table (PID USER CMD %CPU %MEM RES TIME+ S) | ✓ | ✓ |
-| System-process filter | UID < 1000 | UID < 500 / `_daemon` users |
-| GPU | — (needs a GPU collector) | — |
+**LINUXPULSE** is a desktop-based Linux system monitoring and performance analytics application designed to provide real-time visibility into system resource utilization and running processes.
 
-Anything a platform doesn't report is shown as "—" or "unavailable", never as a made-up number.
-If `top` can't be started, the app falls back to demo data and says why in the terminal.
+The application combines Linux system monitoring utilities with a Python-based graphical interface to present system performance information in an intuitive and structured manner.
 
-## Run
+Unlike traditional terminal-based monitoring utilities, LINUXPULSE provides a centralized dashboard featuring live resource metrics, process-level monitoring, historical visualization, statistical analytics, and configurable resource alerts.
 
-Quickest (Linux or macOS): `./run.sh`. It creates a `.venv`, installs matplotlib on first run, then starts the app.
+The project also incorporates a separate C++ performance benchmarking experiment using GCC and GNU gprof to demonstrate profiling, bottleneck identification, and optimization techniques.
 
-Requirements: **Python 3.9+** with **Tk 8.6+** (Tk 9 also works) and matplotlib.
+## Objectives
 
-### Linux (any distro, X11 or Wayland)
-```bash
-sudo apt install python3-tk            # Debian/Ubuntu/Mint
-# sudo dnf install python3-tkinter     # Fedora/RHEL
-# sudo pacman -S tk                    # Arch/Manjaro
-python3 -m pip install -r requirements.txt
-python3 main.py
-```
+- Monitor Linux system resources in near real time.
+- Display CPU, RAM, swap and system load information.
+- Track running processes and their resource consumption.
+- Visualize historical system performance.
+- Apply numerical analysis to resource utilization data.
+- Identify resource-intensive processes.
+- Generate alerts when configurable thresholds are exceeded.
+- Demonstrate performance profiling and optimization using GCC and gprof.
 
-### macOS (Intel and Apple Silicon M1–M5)
-Use Python from **python.org** (includes Tk) or **Homebrew**:
-```bash
-brew install python python-tk          # or install from https://www.python.org/downloads/
-python3 -m pip install -r requirements.txt
-python3 main.py
-```
-Don't use the Xcode/system `/usr/bin/python3`: it ships Tk 8.5, which renders this theme badly.
-The app prints a warning if it detects that.
+## Features
 
-Optional typography: IBM Plex (`sudo apt install fonts-ibm-plex`, or `brew install --cask font-ibm-plex-sans font-ibm-plex-mono`).
-Otherwise it falls back to SF / Helvetica Neue / Menlo on macOS and Inter / Ubuntu / DejaVu on Linux.
+### 1. Real-Time System Monitoring
 
-### Platform handling (`gui/platform_support.py`)
-- Shortcuts use **⌘ on macOS** (Ctrl also works there) and **Ctrl on Linux**.
-- Font sizes are normalised: Aqua Tk renders at 72 dpi vs ~96 dpi on X11, so fonts are scaled to look the same.
-- Starts maximised on screens ≤ 1600 px wide (13–14" MacBooks, laptops).
-- macOS: ⌘Q and the app menu's Quit go through the same clean shutdown as closing the window.
+Monitor important system-level metrics:
 
-| Key (Linux / macOS) | Action |
+| Metric | Description |
 |---|---|
-| `Ctrl+1 … 4` / `⌘1 … 4` | switch view |
-| `Space` | pause / resume live updates (collection keeps running) |
-| `Ctrl+F` / `⌘F`, `Esc` | focus / clear process search |
-| click a legend item | hide / show that chart dimension |
-| click a column heading | sort (again to reverse) |
+| CPU utilization | Overall CPU usage percentage |
+| CPU cores | Number of available logical CPU cores |
+| Load average | System load over 1, 5 and 15 minutes |
+| RAM utilization | Total, used and available memory |
+| Swap utilization | Total and used swap memory |
 
-Edge-case testing with the dummy source:
+The default monitoring interval is **2 seconds**.
 
-```bash
-DASH_DUMMY_CORES=32 python3 main.py   # many CPUs (per-core switches to heat tiles)
-DASH_DUMMY_EMPTY=1  python3 main.py   # empty process list
-DASH_DUMMY_NOSWAP=1 python3 main.py   # swap unavailable
-```
+### 2. Process Monitoring
 
-## Files
+LINUXPULSE provides a live process table containing:
+
+| Attribute | Description |
+|---|---|
+| PID | Process identifier |
+| Process name | Name of the running process |
+| CPU % | CPU consumption |
+| Memory % | Memory consumption |
+| User | Process owner |
+| State | Current process state |
+
+Additional functionality:
+
+- Sort processes by CPU utilization.
+- Sort processes by memory utilization.
+- Refresh process information automatically.
+- Identify resource-intensive processes.
+- Handle processes that appear or disappear during monitoring.
+
+### 3. Historical Performance Visualization
+
+The application uses Matplotlib embedded inside the Tkinter interface to visualize resource utilization over time.
+
+Available visualizations:
+
+- CPU utilization versus time.
+- RAM utilization versus time.
+- Swap utilization versus time (where implemented).
+
+The application maintains a bounded historical buffer to prevent unbounded memory consumption.
+
+Default historical capacity: **300 samples**.
+
+### 4. Statistical Analytics
+
+NumPy is used to perform numerical analysis on collected system measurements.
+
+Supported analytical metrics include:
+
+- Mean CPU utilization.
+- Peak CPU utilization.
+- Minimum CPU utilization.
+- CPU standard deviation.
+- Mean RAM utilization.
+- Peak RAM utilization.
+- Minimum RAM utilization.
+- RAM standard deviation.
+- Rolling averages.
+- Top CPU-consuming processes.
+- Top memory-consuming processes.
+
+### 5. Resource Threshold Alerts
+
+LINUXPULSE supports configurable resource utilization thresholds.
+
+Default configuration:
+
+| Resource | Alert threshold |
+|---|---:|
+| CPU | 80% |
+| RAM | 85% |
+| Swap | 80% |
+
+Alerts help identify potentially overloaded system resources.
+
+### 6. Performance Profiling
+
+The project includes a separate C++ performance benchmark designed around computational workloads relevant to system analytics.
+
+The benchmark uses:
+
+- GCC for compilation.
+- `-pg` instrumentation.
+- GNU gprof for profiling.
+- Before-and-after optimization comparisons.
+
+The profiling experiment demonstrates how computational bottlenecks can be identified and optimized.
+
+**Important:** GNU gprof profiles the separate C++ benchmark. It is not used to directly profile the Python dashboard.
+
+### 7. Mock Monitoring Mode
+
+A mock-data mode allows the application to be tested without depending on live system measurements.
+
+It is useful for:
+
+- Independent GUI development.
+- Integration testing.
+- Demonstrating dashboard behavior.
+- Testing analytics and visualization components.
+
+Mock measurements are explicitly distinguished from real system measurements.
+
+---
+
+## System Architecture
+
+LINUXPULSE follows a modular architecture that separates system data acquisition, analytics, visualization and user interface responsibilities.
 
 ```text
-main.py                     entry point (DummySource → DashboardApp)
-gui/
-  app.py                    window, icon rail, top bar (play/pause, range, alerts), section header, live loop
-  styles.py                 palette, CPU/memory dimension colours, fonts, ttk styles
-  widgets.py                Panel, RingGauge, GaugeCard, NumberCard, PerCoreBars, DimensionLegend,
-                            IndexPanel, RailButton, TimeRuler, PlayButton, AlertList, BarList, TabControl, ...
-  process_table.py          top-style sortable/searchable/filterable ttk.Treeview
-  graph_panel.py            ChartPanel: FigureCanvasTkAgg + legend
-  controller.py             DataPump: background thread + queue.Queue
-  view_state.py             GUI-side view model (fields map to top's output)
-  config.py                 team details, timing, thresholds  ← fill in
-  views/                    intro.py, overview.py, processes.py, analytics.py
-visualization/plots.py      StackedAreaPlot, MemoryPie, AnalyticsGrid (+ per-core heatmap) — no Tkinter
-live/top_linux.py           TEMPORARY live source: procps top parser (Linux)
-live/top_macos.py           TEMPORARY live source: BSD top parser (macOS)
-live/top_stream.py          runs one long-lived top process, yields complete frames
-live/analytics_lite.py      TEMPORARY history / averages / peaks / alerts
-dummy/dummy_source.py       synthetic data for --demo
-docs/gui_design.md          layout and component hierarchy
-docs/screenshots/           reference screenshots
+                 LINUX OPERATING SYSTEM
+                           |
+                           v
+                 Linux top (batch mode)
+                           |
+                           v
+                 +-------------------+
+                 | System Collector  |
+                 |    Member 1       |
+                 +-------------------+
+                           |
+                           v
+                 +-------------------+
+                 | Snapshot Parser   |
+                 +-------------------+
+                           |
+                           v
+                 +-------------------+
+                 | Thread-Safe Queue |
+                 +-------------------+
+                           |
+                           v
+                 +-------------------+
+                 | Application       |
+                 | Controller        |
+                 |    Member 5       |
+                 +-------------------+
+                      /          \
+                     /            \
+                    v              v
+          +----------------+  +----------------+
+          | Analytics      |  | Tkinter GUI    |
+          | Member 2       |  | Member 3       |
+          +----------------+  +----------------+
+                    |              |
+                    v              v
+          +----------------+  +----------------+
+          | Statistics &   |  | Live Metrics & |
+          | Alerts         |  | Process Table  |
+          +----------------+  +----------------+
+                                   |
+                                   v
+                          +----------------+
+                          | Matplotlib     |
+                          | Visualization  |
+                          | Member 4       |
+                          +----------------+
 ```
 
-## Integrating the real backend
+### Application Data Flow
 
-1. Write `gui/adapter.py`: `to_view_state(snapshot, analytics) -> ViewState`, based on `models.py`.
-2. Wrap collector + analytics in an object with `run(stop_event, out_queue)` that puts
-   adapted `ViewState`s on the queue.
-3. Return it from `make_source()` in `main.py` instead of the `live/` sources.
+1. Linux system information is collected using `top` in batch mode.
+2. The collector parses raw monitoring output.
+3. Measurements are converted into standardized system snapshots.
+4. Snapshots are transferred through a thread-safe queue.
+5. The application controller coordinates data distribution.
+6. The analytics engine processes measurements and maintains historical statistics.
+7. Tkinter displays live system information and process data.
+8. Matplotlib updates historical resource utilization graphs.
 
-**Live data on macOS:** the GUI runs on both systems, but macOS `top` prints a different (BSD)
-format: no `%Cpu(s): us sy ni wa hi si st` line, no per-CPU lines, no iowait or steal.
-A Linux `top` parser won't read it. On a Mac, either demo with the dummy source, or give the
-collector a macOS path. Fields macOS can't provide simply stay `None` and the GUI shows "—".
+### Threading Architecture
 
-Per-core data comes from top's per-CPU lines (`top -b -1`, or press `1` interactively).
-If the collector doesn't provide them, `per_core=None` and the GUI says so instead of
-inventing numbers. The High GPU filter stays "unavailable" unless `gpu_available` is true.
+To maintain GUI responsiveness:
+
+- Data acquisition runs in a background thread.
+- A thread-safe queue transfers measurements.
+- Tkinter's `after()` mechanism periodically processes incoming snapshots.
+- All Tkinter widget updates happen on the GUI main thread.
+- Matplotlib updates also happen on the GUI main thread.
+- Historical data is maintained using a bounded buffer.
+
+This prevents system monitoring operations from blocking the graphical interface.
+
+---
+
+## Technology Stack
+
+| Technology | Purpose |
+|---|---|
+| Python | Main application development |
+| Tkinter | Graphical user interface |
+| NumPy | Numerical computation and analytics |
+| Matplotlib | Historical performance visualization |
+| Linux `top` | System and process monitoring |
+| Python subprocess | Executing Linux monitoring utilities |
+| C++ | Performance benchmark |
+| GCC | C++ compilation and instrumentation |
+| GNU gprof | Performance profiling |
+| Bash | Application launcher and automation |
+| GNU Make | Build and task automation |
+| unittest | Unit and integration testing |
+| Git | Version control |
+
+---
+
+## Project Structure
+
+```text
+linuxpulse/
+│
+├── main.py
+├── config.py
+├── models.py
+├── requirements.txt
+├── Makefile
+├── README.md
+├── .gitignore
+│
+├── collector/
+│   ├── __init__.py
+│   ├── top_collector.py
+│   └── parser.py
+│
+├── analytics/
+│   ├── __init__.py
+│   └── engine.py
+│
+├── gui/
+│   ├── __init__.py
+│   ├── dashboard.py
+│   └── process_table.py
+│
+├── visualization/
+│   ├── __init__.py
+│   └── plots.py
+│
+├── scripts/
+│   ├── launch.sh
+│   └── profile.sh
+│
+├── tests/
+│   ├── __init__.py
+│   ├── test_parser.py
+│   ├── test_collector.py
+│   ├── test_analytics.py
+│   ├── test_visualization.py
+│   └── test_integration.py
+│
+├── profiling/
+│   ├── README.md
+│   ├── cpp_benchmark/
+│   │   ├── benchmark.cpp
+│   │   └── Makefile
+│   └── results/
+│
+├── docs/
+│   ├── architecture.md
+│   ├── integration_guide.md
+│   ├── collector_design.md
+│   ├── analytics_design.md
+│   ├── visualization_design.md
+│   ├── testing_strategy.md
+│   ├── performance_analysis.md
+│   ├── report.tex
+│   └── presentation.tex
+│
+└── assets/
+    └── screenshots/
+```
+
+---
+
+## Installation
+
+### Prerequisites
+
+LINUXPULSE is primarily developed and tested for Linux environments.
+
+Required tools:
+
+- Python 3
+- pip
+- Tkinter
+- GNU Make
+- GCC / G++
+- GNU gprof
+- Linux `top`
+
+For Arch Linux / Omarchy:
+
+```bash
+sudo pacman -S python python-pip tk gcc make gprof
+```
+
+If the `gprof` package name differs in your configured repositories, install the package providing GNU gprof (commonly available through `binutils`).
+
+### Clone the Repository
+
+```bash
+git clone <YOUR_GITHUB_REPOSITORY_URL>
+cd linuxpulse
+```
+
+Replace the placeholder with the actual repository URL.
+
+### Create a Virtual Environment
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
+
+### Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### Verify the Environment
+
+```bash
+python -m tkinter
+```
+
+This should open a small Tkinter test window.
+
+Also verify:
+
+```bash
+top --version
+gcc --version
+gprof --version
+make --version
+```
+
+---
+
+## Running the Application
+
+### Real Monitoring Mode
+
+Launch LINUXPULSE using:
+
+```bash
+python main.py
+```
+
+Alternatively, use the project launcher:
+
+```bash
+chmod +x scripts/launch.sh
+./scripts/launch.sh
+```
+
+### Mock Monitoring Mode
+
+To launch the application with simulated system measurements:
+
+```bash
+python main.py --mock
+```
+
+Mock mode is intended for GUI testing and demonstrations.
+
+---
+
+## Build Automation
+
+LINUXPULSE provides a GNU Make-based workflow.
+
+| Command | Description |
+|---|---|
+| `make help` | Display available commands |
+| `make install` | Install Python dependencies |
+| `make run` | Launch real monitoring mode |
+| `make mock` | Launch mock monitoring mode |
+| `make test` | Run the test suite |
+| `make profile` | Execute the profiling workflow |
+| `make clean` | Remove generated temporary files |
+
+Run a command using:
+
+```bash
+make <target>
+```
+
+---
+
+## Testing
+
+The project uses Python's built-in `unittest` framework.
+
+### Run All Tests
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+Alternatively:
+
+```bash
+make test
+```
+
+### Testing Strategy
+
+The testing process covers:
+
+**Collector tests**
+- Parsing monitoring output.
+- Handling missing fields.
+- Handling malformed output.
+- Handling command failures.
+- Handling empty process lists.
+
+**Analytics tests**
+- Mean and peak calculations.
+- Rolling averages.
+- Process ranking.
+- Threshold alerts.
+- Historical buffer limits.
+
+**Visualization tests**
+- Historical sample handling.
+- Empty data handling.
+- Graph update behavior.
+
+**Integration tests**
+- Snapshot delivery.
+- Queue handling.
+- Controller coordination.
+- Mock monitoring.
+- Shutdown behavior.
+
+Unit tests should use controlled fixtures and mocked command outputs rather than depending on actual system load.
+
+---
+
+## Performance Profiling
+
+LINUXPULSE includes a separate C++ benchmark to demonstrate performance profiling and optimization.
+
+### Profiling Workflow
+
+```text
+C++ Benchmark
+     |
+     v
+GCC Compilation (-pg)
+     |
+     v
+Benchmark Execution
+     |
+     v
+gmon.out Generation
+     |
+     v
+GNU gprof Analysis
+     |
+     v
+Bottleneck Identification
+     |
+     v
+Code Optimization
+     |
+     v
+Reprofiling and Comparison
+```
+
+### Run Profiling
+
+```bash
+chmod +x scripts/profile.sh
+./scripts/profile.sh
+```
+
+Alternatively:
+
+```bash
+make profile
+```
+
+### Profiling Concepts
+
+| Tool | Purpose |
+|---|---|
+| GCC | Compiles the benchmark |
+| `-pg` | Enables profiling instrumentation |
+| `gmon.out` | Stores profiling data |
+| gprof | Analyzes execution-time distribution and function calls |
+
+The profiling experiment compares an original implementation with an optimized implementation under equivalent workload conditions.
+
+Results should be documented in:
+
+```text
+profiling/results/
+docs/performance_analysis.md
+```
+
+Actual benchmark results must be generated through execution rather than assumed or fabricated.
+
+---
+
+## Configuration
+
+Important application settings are centralized in `config.py`.
+
+| Configuration | Default |
+|---|---:|
+| Sampling interval | 2 seconds |
+| Historical buffer | 300 samples |
+| CPU threshold | 80% |
+| RAM threshold | 85% |
+| Swap threshold | 80% |
+| Default process count | 20 |
+| Memory display unit | MiB |
+
+These settings can be modified according to monitoring requirements.
+
+---
+
+## Screenshots
+
+Application screenshots will be maintained in:
+
+```text
+assets/screenshots/
+```
+
+Suggested screenshots:
+
+1. Main dashboard showing live CPU, RAM and swap utilization.
+2. Process monitoring table.
+3. Historical CPU and RAM graphs.
+4. Analytics and threshold alerts.
+5. Mock monitoring mode.
+
+<p align="center">
+  <i>Application screenshots will be added after final GUI integration.</i>
+</p>
+
+---
+
+## Team Responsibilities
+
+LINUXPULSE is developed collaboratively by a five-member team.
+
+| Member | Role | Responsibilities |
+|---|---|---|
+| Member 1 | Linux Data Acquisition Engineer | Linux monitoring, process collection, parsing and launcher |
+| Member 2 | Analytics Engineer | NumPy-based analytics, historical statistics and alerts |
+| Member 3 | GUI Engineer | Tkinter dashboard, process table and user experience |
+| Member 4 | Visualization & QA Engineer | Matplotlib graphs, integration tests and technical report |
+| Member 5 | Systems Architect & Integration Engineer | Architecture, shared interfaces, application orchestration, profiling, automation and release |
+
+---
+
+## Academic Context
+
+**Institution:** Indian Institute of Technology Dharwad
+
+**Project:** LINUXPULSE — Real-Time Linux System Monitoring and Performance Analytics Dashboard
+
+**Project Domain:** Linux Systems Programming, Performance Analysis and Software Engineering
+
+The project demonstrates practical application of:
+
+- Linux process and system monitoring.
+- Python application architecture.
+- Multithreaded programming.
+- GUI development.
+- Numerical computing.
+- Data visualization.
+- Software testing.
+- Performance profiling.
+- Code optimization.
+- Build automation.
+
+---
+
+## Scope and Limitations
+
+### In Scope
+
+- Local Linux system monitoring.
+- CPU, RAM and swap statistics.
+- Process-level resource monitoring.
+- Historical performance graphs.
+- Statistical analytics.
+- Threshold-based alerts.
+- Performance benchmarking and profiling.
+
+### Out of Scope
+
+- Remote system monitoring.
+- Cloud-based monitoring.
+- Kernel module development.
+- Process termination or priority modification.
+- Predictive machine learning.
+- Database-backed historical storage.
+- User authentication.
+
+---
+
+## Future Improvements
+
+Potential extensions include:
+
+- CSV export of monitoring history.
+- Process search and filtering.
+- Configurable monitoring intervals.
+- Extended historical data storage.
+- Network monitoring.
+- Disk I/O monitoring.
+- Temperature and hardware sensor monitoring.
+- Anomaly detection.
+- Remote monitoring support.
+
+These features are outside the initial project scope unless implemented after all mandatory requirements are satisfied.
+
+---
+
+## License
+
+This project was developed for academic and educational purposes.
+
+A formal open-source license can be added by the project maintainers.
+
+---
+
+<p align="center">
+  <strong>LINUXPULSE</strong><br/>
+  <i>Monitor. Analyze. Optimize.</i>
+</p>
