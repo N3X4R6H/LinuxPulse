@@ -1,7 +1,7 @@
 # LINUXPULSE — Architecture
 
 **Owner:** Member 5 (architecture, integration, profiling, build, release)
-**Status:** Stage 1 — architectural foundation
+**Status:** Stage 1 architectural foundation + Stage 2 controller wiring
 **Last updated:** 2026-11-08
 
 This document is the authoritative description of how LINUXPULSE fits
@@ -68,9 +68,11 @@ own ad-hoc dict shape.
 
 ## 2. Module ownership
 
-| Path | Owner | Stage-1 artefact |
+| Path | Owner | Stage-2 artefact |
 | --- | --- | --- |
-| `main.py` | M5 | not yet (Stage 2) |
+| `main.py` | M5 | **delivered** (controller + DI + CLI) |
+| `mock_source.py` | M5 | **delivered** (mock-mode collector) |
+| `tests/test_controller.py` | M5 | **delivered** (22 tests) |
 | `config.py` | M5 | **delivered** |
 | `models.py` | M5 | **delivered** |
 | `requirements.txt` | M1 + M5 | **delivered** |
@@ -106,18 +108,21 @@ their own `__init__.py` content.
    queue is full the **oldest pending** snapshot is dropped, on the
    principle that freshest data matters most and a backlog means the
    consumer is already overloaded.
-4. **History.** The analytics thread pulls from the queue and appends each
-   snapshot to a `collections.deque(maxlen=config.history_limit)` (default
-   300 samples ≈ 10 minutes). The deque silently evicts the oldest entry
-   when full — this is the only place history is trimmed.
-5. **Analyze.** On each tick the analytics engine reduces the deque into a
+4. **Drain + history.** The controller's periodic tick (on the GUI main
+   thread, see §4) pulls every available snapshot off the queue with
+   `get_nowait` — each snapshot is recorded exactly once — and appends it
+   to the analytics engine's `collections.deque(maxlen=history_limit)`
+   (default 300 samples ≈ 10 minutes). The deque silently evicts the
+   oldest entry when full — this is the only place history is trimmed.
+5. **Analyze.** On the same tick the controller calls
+   `analytics.analyze()` to reduce the deque into a
    `models.AnalyticsResult` (statistics, trend slopes, top processes,
    alerts) using thresholds from `config`.
-6. **Render.** The GUI main thread, on a `Tkinter after()` timer
-   (`gui_refresh_interval_seconds`, default 1 s), reads the latest
-   snapshot + latest `AnalyticsResult` and redraws. Visualization
-   functions build Matplotlib figures from the deque; the GUI embeds them
-   via `FigureCanvasTkAgg`.
+6. **Render.** On the same tick the controller builds Matplotlib figures
+   from the deque via the visualization functions and calls
+   `dashboard.update(snapshot, result, figures)`. The dashboard embeds
+   them via `FigureCanvasTkAgg`. All three steps (drain, analyze, render)
+   happen on the GUI main thread inside one `after()` callback.
 
 No data flows the other direction. The GUI never calls the collector
 directly; it reads published results. This keeps the pipeline
@@ -125,50 +130,67 @@ single-direction and the collector free of UI concerns.
 
 ## 4. Threading architecture
 
-Three threads plus the Tkinter main loop:
+**One background thread** plus the Tkinter main loop. (Stage 1 sketched a
+separate analytics thread; Stage 2 simplifies this — analytics runs on the
+GUI main thread, see below.)
 
 | Thread | Owner | Daemon | Role |
 | --- | --- | --- | --- |
 | `linuxpulse-collector` | M1 | yes | subprocess + parse + enqueue |
-| `linuxpulse-analytics` | M2 | yes | dequeue + history + analyze |
-| `linuxpulse-gui` (main) | M3 | no (main) | Tkinter loop, render |
+| `linuxpulse-gui` (main) | M5 controller + M3 dashboard | no (main) | drain queue → analytics → figures → dashboard, via `after()` |
 
-The collector and analytics threads are daemons (`config.*_thread_daemon`)
-so that closing the GUI window can terminate the process without an
-explicit join succeeding. The GUI runs on the process main thread because
-Tkinter is not thread-safe and must be driven from the thread that created
-the root window.
+The collector is a daemon (`config.collector_thread_daemon`) so that
+closing the GUI window can terminate the process even if a join times out.
+The GUI and all analytics/visualization work run on the process main
+thread because Tkinter is not thread-safe and must be driven from the
+thread that created the root window.
 
-Cross-thread data hand-off uses exactly two synchronization points:
+Why analytics is on the main thread, not its own thread: the analytics
+engine's work (drain + record + analyze) is cheap relative to a GUI
+refresh, and running it on the same thread that renders eliminates the
+need to synchronize a "latest result" between an analytics thread and the
+GUI thread. The only cross-thread boundary is the queue.
 
-* A `queue.Queue` between collector and analytics (thread-safe by design).
-* Two single-slot holders — one for the latest `SystemSnapshot`, one for
-  the latest `AnalyticsResult` — written by the analytics thread and read
-  by the GUI. A single reference assignment is atomic under the GIL, so a
-  `threading.Lock` is used only to make the read-modify of "latest pair"
-  explicit; it is not contended. The history deque is touched only by the
-  analytics thread, so it needs no lock for writes; visualization reads it
-  via a shallow copy (`list(history)`) to avoid iteration-during-mutation.
+Cross-thread data hand-off uses exactly one synchronization point:
 
-`time.sleep` is never used to pace the GUI. The GUI schedules its next
-refresh with `root.after(int(gui_refresh_interval_seconds * 1000), ...)`,
-which keeps the Tkinter event loop responsive.
+* A bounded `queue.Queue` between the collector (producer) and the
+  controller's tick on the GUI thread (consumer). Thread-safe by design.
+
+The latest snapshot/result pair, the history deque, and all Matplotlib
+figures are touched only by the GUI main thread, so they need no lock for
+the data flow. The controller keeps a `threading.Lock` around its
+`latest_snapshot`/`latest_result` fields purely as defensive hygiene for
+the public `latest_snapshot` / `latest_result` properties; it is not on
+the hot path.
+
+`time.sleep` is never used to pace the GUI. The controller schedules its
+next tick through `dashboard.schedule(callback, delay_ms)` (which wraps
+`root.after(int(gui_refresh_interval_seconds * 1000), ...)`), keeping the
+Tkinter event loop responsive.
 
 ## 5. GUI update strategy
 
-The GUI follows a strict "main thread touches widgets" rule:
+The application follows a strict "main thread touches widgets" rule:
 
-* The analytics thread computes results and stashes them; it **never**
-  calls any Tkinter method.
-* On each `after()` tick the GUI main thread:
-  1. Reads the latest snapshot and `AnalyticsResult`.
-  2. Updates the process table (rebuild rows from `snapshot.processes`).
-  3. Updates headline gauges (CPU%, RAM%, swap%) with thresholds applied
-     as colour changes.
-  4. Asks the visualization layer to refresh figures and embeds them.
-* If no snapshot is available yet, the GUI renders `SystemSnapshot.empty()`
-  placeholders ("—" for `None` values) so the window never shows stale or
-  blank cells.
+* The collector (background thread) only pushes `SystemSnapshot` objects
+  into the queue; it **never** calls any Tkinter or Matplotlib method.
+* On each `after()` tick the controller, on the GUI main thread:
+  1. Drains every available snapshot from the queue, recording each into
+     analytics exactly once.
+  2. Calls `analytics.analyze()` to refresh the `AnalyticsResult`.
+  3. Builds Matplotlib figures from `analytics.history()` via the
+     visualization functions (each wrapped in its own try/except so one
+     failure does not lose the others).
+  4. Calls `dashboard.update(snapshot, result, figures)` — the dashboard
+     redraws gauges, the process table, and embeds the figures.
+* If no snapshot is available yet, the controller passes
+  `SystemSnapshot.empty()` so the dashboard renders "—" placeholders
+  rather than blank cells. If no fresh sample arrives for the stale
+  threshold (`max(3 × sampling_interval, 5s)`), a warning is logged once
+  per stale episode; the last known snapshot stays on screen.
+* `dashboard.update` exceptions are caught at the `after()` boundary,
+  logged, and the next tick proceeds — the window never closes itself on
+  a data error.
 
 Widgets are updated in place where possible (table cell text) rather than
 destroyed and recreated, to avoid flicker and keep memory stable over long
@@ -177,7 +199,8 @@ runs.
 ## 6. Historical data management
 
 * Storage: a single `collections.deque(maxlen=history_limit)` held by the
-  analytics thread. Default 300 samples.
+  analytics engine, appended by the controller on the GUI main thread.
+  Default 300 samples.
 * Retention: automatic, O(1) eviction of the oldest sample on append. No
   manual pruning loop, no periodic cleanup thread.
 * Window: at 2 s × 300 samples the window is 600 s (10 min). The
