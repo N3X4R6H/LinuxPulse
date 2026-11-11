@@ -27,7 +27,7 @@ class AppConfig:
     history_limit: int = 300
     default_process_count: int = 20
 
-    cpu_threshold_percent: float = 90.0
+    cpu_threshold_percent: float = 80.0
     ram_threshold_percent: float = 85.0
     swap_threshold_percent: float = 80.0
 

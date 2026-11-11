@@ -29,20 +29,9 @@ All four unit tests passed during initial verification.
 
 ## 3. Performance Testing
 
-A separate performance-testing script simulates 1,000 graph updates.
-
-The test measures:
-
-- Total execution time.
-- Average time per update.
-- Current Python memory consumption.
-- Peak Python memory consumption.
-
-The script uses `time.perf_counter()` for execution-time measurement and `tracemalloc` for Python memory tracking.
-
-### Execution
-
-`python3 scripts/performance_test.py`
+The Tk plot-update script was removed. Performance is covered by the C++ gprof experiment
+(`profiling/README.md`, `docs/performance_analysis.md`) and by the resource measurements of the
+running application in `docs/integration_guide.md`.
 
 ## 4. Integration Testing
 

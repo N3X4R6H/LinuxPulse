@@ -29,3 +29,34 @@ htmlcov/
 *.prof
 gmon.out
 *.dSYM/
+
+# Virtual environments (additional names)
+.env/
+.venv.bak/
+
+# Local environment files
+.env
+.env.*
+*.local
+
+# Logs
+*.log
+logs/
+
+# Profiling / benchmark artifacts
+profiling/cpp_benchmark/benchmark
+profiling/cpp_benchmark/benchmark_optimized
+profiling/cpp_benchmark/*.o
+*.o
+*.out
+!gmon.out.keep
+callgrind.out.*
+
+# Build artifacts
+build/
+dist/
+*.egg
+.mypy_cache/
+.ruff_cache/
+*.tmp
+profiling/cpp_benchmark/benchmark_plain

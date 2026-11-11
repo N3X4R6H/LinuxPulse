@@ -1,28 +1,23 @@
-CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -pedantic
-PROFILE_FLAGS = -O0 -pg
+# C++ benchmark build (separate from the Python app). Run `make` here, or use ../../scripts/profile.sh.
+CXX      ?= g++
+CXXFLAGS := -std=c++17 -Wall -Wextra -pedantic
+SRC      := benchmark.cpp
 
-TARGET = benchmark
-SOURCE = benchmark.cpp
+.PHONY: all profiled plain run clean
+all: profiled
 
-.PHONY: all run profile clean optimized
+# -O0 -pg : gprof instrumentation, no optimization, so functions are not inlined away.
+profiled: benchmark
+benchmark: $(SRC)
+	$(CXX) $(CXXFLAGS) -O0 -pg -o $@ $<
 
-all: $(TARGET)
+# Same flags without -pg: used only to time the program without profiling overhead.
+plain: benchmark_plain
+benchmark_plain: $(SRC)
+	$(CXX) $(CXXFLAGS) -O0 -o $@ $<
 
-$(TARGET): $(SOURCE)
-	$(CXX) $(CXXFLAGS) $(PROFILE_FLAGS) -o $(TARGET) $(SOURCE)
-
-run: $(TARGET)
-	./$(TARGET)
-
-profile: $(TARGET)
-	rm -f gmon.out ../results/gprof_report.txt
-	./$(TARGET)
-	gprof ./$(TARGET) gmon.out > ../results/gprof_report.txt
-	@echo "Created ../results/gprof_report.txt"
-
-optimized:
-	$(CXX) $(CXXFLAGS) -O2 -o benchmark_optimized $(SOURCE)
+run: benchmark
+	./benchmark $(ARGS)
 
 clean:
-	rm -f $(TARGET) benchmark_optimized gmon.out ../results/gprof_report.txt
+	rm -f benchmark benchmark_plain gmon.out

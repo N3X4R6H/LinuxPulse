@@ -71,22 +71,22 @@ own ad-hoc dict shape.
 | Path | Owner | Stage-2 artefact |
 | --- | --- | --- |
 | `main.py` | M5 | **delivered** (controller + DI + CLI) |
-| `mock_source.py` | M5 | **delivered** (mock-mode collector) |
+| ~~`mock_source.py`~~ | M5 | removed; the mock provider is `main.DemoCollector` |
 | `tests/test_controller.py` | M5 | **delivered** (22 tests) |
 | `config.py` | M5 | **delivered** |
 | `models.py` | M5 | **delivered** |
 | `requirements.txt` | M1 + M5 | **delivered** |
-| `Makefile` | M5 | not yet (Stage 2) |
-| `README.md` | M3 + M5 | not yet (Stage 2) |
+| `Makefile` | M5 | **delivered** (Stage 4) |
+| `README.md` | M3 + M5 | **delivered** |
 | `.gitignore` | M5 | **delivered** |
-| `collector/` | M1 | package skeleton only |
-| `analytics/` | M2 | package skeleton only |
-| `gui/` | M3 | package skeleton only |
-| `visualization/` | M4 | package skeleton only |
+| `collector/` | M1 | **delivered** (integrated, Stage 6) |
+| `analytics/` | M2 | **delivered** (integrated, Stage 6) |
+| `gui/` | M3 | **delivered** (integrated, Stage 6) |
+| `visualization/` | M4 | **delivered** (integrated, Stage 6) |
 | `scripts/launch.sh` | M1 | not yet |
-| `scripts/profile.sh` | M5 | not yet |
-| `tests/` | M1, M2, M4 | `__init__.py` only |
-| `profiling/` | M5 + M2 | skeleton only |
+| `scripts/profile.sh` | M5 | **delivered** (Stage 5) |
+| `tests/` | M1, M2, M4, M5 | **delivered** |
+| `profiling/` | M5 + M2 | **delivered** (Stage 5) |
 | `docs/architecture.md` | M5 | **delivered** |
 | `docs/integration_guide.md` | M5 | **delivered** |
 | `docs/development_workflow.md` | M5 | **delivered** |

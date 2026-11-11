@@ -1,18 +1,3 @@
-"""LinuxPulse entry point and application controller.
-
-Pipeline (one background thread, GUI on the Tk main thread):
-
-    collector.top_collector.collect_system_data()   (Atharv)   -> dict
-      -> to_snapshot()                              (adapter)  -> models.SystemSnapshot
-      -> analytics.AnalyticsEngine.add_snapshot()   (Manish)   -> analytics dict
-      -> to_view_state()                            (adapter)  -> gui.ViewState
-      -> queue.Queue -> gui.Dashboard                (Dhiren)   (charts: visualization/, Pavan)
-
-Usage:
-    python3 main.py                 # live data (Linux: /proc + top · macOS: kernel stats, vm_stat, ps)
-    python3 main.py --demo          # synthetic data through the same pipeline (any OS); alias: --mock
-    python3 main.py --interval 1    # override config sampling interval (seconds)
-"""
 import sys
 
 if sys.version_info < (3, 9):
@@ -94,20 +79,42 @@ def cpu_breakdown(prev, cur):
     return CpuBreakdown(**pct)
 
 
-_uid_cache = {}
+_user_cache = {}
+
+
+def _sys_uid(uid):
+    return uid < 1000 or uid == 65534      # 65534 = nobody
+
+
+def resolve_user(name):
+    """top truncates long user names to 8 chars + '+' ('systemd+', 'rangero+').
+
+    Returns (full_name, is_system): the full name if exactly one account matches the prefix,
+    and is_system = True/False when every match agrees (Linux convention: UID < 1000), else None.
+    """
+    if not name:
+        return name, None
+    if name not in _user_cache:
+        full, system = name, None
+        try:
+            import pwd
+            if name.endswith("+"):
+                prefix = name[:-1]
+                hits = [e for e in pwd.getpwall() if e.pw_name.startswith(prefix)]
+                if len(hits) == 1:
+                    full = hits[0].pw_name
+                if hits and len({_sys_uid(e.pw_uid) for e in hits}) == 1:
+                    system = _sys_uid(hits[0].pw_uid)
+            else:
+                system = _sys_uid(pwd.getpwnam(name).pw_uid)
+        except (ImportError, KeyError):
+            pass
+        _user_cache[name] = (full, system)
+    return _user_cache[name]
 
 
 def is_system_user(name):
-    """Linux convention: UID < 1000 is a system account; None if unknown."""
-    if not name:
-        return None
-    if name not in _uid_cache:
-        try:
-            import pwd
-            _uid_cache[name] = pwd.getpwnam(name.rstrip("+")).pw_uid < 1000
-        except (ImportError, KeyError):
-            _uid_cache[name] = None
-    return _uid_cache[name]
+    return resolve_user(name)[1]
 
 
 def read_uptime():
@@ -129,7 +136,7 @@ def _row(p, users=None):
     """models.ProcessInfo or analytics process dict -> gui.ProcessRow."""
     get = p.get if isinstance(p, dict) else (lambda k, d=None: getattr(p, k, d))
     pid = get("pid")
-    user = get("username") or (users or {}).get(pid)
+    user = resolve_user(get("username") or (users or {}).get(pid))[0]
     return ProcessRow(pid=pid, name=get("name"), cpu=get("cpu_percent"), mem=get("memory_percent"),
                       state=get("state"), user=user, is_system=is_system_user(user))
 
@@ -190,6 +197,81 @@ def to_view_state(snap, result, history, extras, alerts, cfg, dims):
 
 
 # ============================================================================
+# Interface compatibility checks (fail early, with an actionable message)
+# ============================================================================
+class IntegrationError(RuntimeError):
+    """A module returned data, or exposes an interface, that does not match the agreed contract."""
+
+
+COLLECTOR_KEYS = ("cpu_cores", "cpu_times", "load_average", "memory", "processes")
+MEMORY_KEYS = ("ram_total", "ram_used", "ram_free")
+ANALYTICS_KEYS = ("resources", "top_cpu_processes", "top_memory_processes", "active_alerts")
+
+
+def validate_collector_data(data):
+    """Collector output must be the agreed dict (KiB memory, cumulative cpu_times, process dicts)."""
+    if not isinstance(data, dict):
+        raise IntegrationError(f"collector returned {type(data).__name__}, expected a dict "
+                               f"(see collector.top_collector.collect_system_data)")
+    missing = [k for k in COLLECTOR_KEYS if k not in data]
+    if missing:
+        raise IntegrationError(f"collector data is missing key(s): {', '.join(missing)}")
+    mem_missing = [k for k in MEMORY_KEYS if k not in (data["memory"] or {})]
+    if mem_missing:
+        raise IntegrationError(f"collector 'memory' is missing key(s): {', '.join(mem_missing)}")
+    if not isinstance(data["processes"], (list, tuple)):
+        raise IntegrationError(f"collector 'processes' is {type(data['processes']).__name__}, expected a list")
+    times = data["cpu_times"]
+    if not isinstance(times, dict) or "total" not in times:
+        raise IntegrationError("collector 'cpu_times' must be a dict of cumulative counters including 'total'")
+    return data
+
+
+def validate_snapshot(snap):
+    if not isinstance(snap, SystemSnapshot):
+        raise IntegrationError(f"to_snapshot() produced {type(snap).__name__}, expected models.SystemSnapshot")
+    return snap
+
+
+def validate_analytics_result(result):
+    """AnalyticsEngine.add_snapshot() must return the agreed analytics dict."""
+    if not isinstance(result, dict):
+        raise IntegrationError(f"analytics returned {type(result).__name__}, expected a dict "
+                               f"(see analytics.engine.AnalyticsEngine.add_snapshot)")
+    missing = [k for k in ANALYTICS_KEYS if k not in result]
+    if missing:
+        raise IntegrationError(f"analytics result is missing key(s): {', '.join(missing)}")
+    return result
+
+
+def validate_view_state(state):
+    if not isinstance(state, ViewState):
+        raise IntegrationError(f"to_view_state() produced {type(state).__name__}, expected gui.dashboard.ViewState")
+    return state
+
+
+def check_interfaces(collect=None):
+    """Startup check that the teammate modules expose what main.py calls. Returns None or raises."""
+    import inspect
+    problems = []
+    for name in ("add_snapshot", "get_history"):
+        if not callable(getattr(AnalyticsEngine, name, None)):
+            problems.append(f"analytics.engine.AnalyticsEngine has no method '{name}()'")
+    try:
+        params = inspect.signature(Dashboard).parameters
+        if not any(p.kind is p.VAR_KEYWORD for p in params.values()):       # **kwargs accepts anything
+            for p in ("root", "updates", "on_close", "source_name"):
+                if p not in params:
+                    problems.append(f"gui.dashboard.Dashboard() has no parameter '{p}'")
+    except (TypeError, ValueError):
+        pass                                                                  # signature not introspectable
+    if collect is not None and not callable(collect):
+        problems.append(f"collector {collect!r} is not callable")
+    if problems:
+        raise IntegrationError("incompatible module interface(s):\n  - " + "\n  - ".join(problems))
+
+
+# ============================================================================
 # Demo collector (same dict shape as collector.top_collector.collect_system_data)
 # ============================================================================
 class DemoCollector:
@@ -208,9 +290,18 @@ class DemoCollector:
         self.times = {k: 0 for k in ("user", "nice", "system", "idle", "iowait", "irq", "softirq", "steal")}
         self.total_kib, self.used = 16 * 1024 * 1024, 6.0 * 1024 * 1024
         self.load = self.cores * 0.3
+        self.swap_total, self.swap_used = 4 * 1024 * 1024, 300 * 1024
+        self.next_pid = 100 + 60 * 37
         self.procs = [dict(pid=100 + i * 37, command=self.rng.choice(self.NAMES), base=self.rng.choice([0, .1, .5, 2, 6]),
-                           mem=round(self.rng.uniform(0, 5), 1), user=self.rng.choice(["root", "dhiren"]))
+                           mem=round(self.rng.uniform(0, 5), 1), user=self.rng.choice(["root", "dhiren"]),
+                           immortal=i < 3)             # first few behave like init/kernel threads
                       for i in range(60)]
+
+    def _spawn(self):
+        r = self.rng
+        self.next_pid += r.randint(1, 40)
+        return dict(pid=self.next_pid, command=r.choice(self.NAMES), base=r.choice([0, .1, .5, 2, 6]),
+                    mem=round(r.uniform(0, 5), 1), user=r.choice(["root", "dhiren"]), immortal=False)
 
     def __call__(self, previous_cpu=None, interval=1.0):
         r = self.rng
@@ -226,12 +317,18 @@ class DemoCollector:
         self.load = max(.05, self.load * .9 + self.cores * self.busy / 100 * .1)
         self.used = max(3e6, min(15e6, self.used + r.uniform(-6e4, 6e4)))
         free = self.total_kib - self.used - 3.2e6
+        if r.random() < .10 and len(self.procs) > 20:                       # a process terminates
+            self.procs.remove(r.choice([p for p in self.procs if not p["immortal"]]))
+        if r.random() < .12 and len(self.procs) < 120:                       # a process is created
+            self.procs.append(self._spawn())
+        self.swap_used = max(0, min(self.swap_total, self.swap_used + r.uniform(-4e4, 4e4)))
         processes = []
         for p in self.procs:
+            p["mem"] = round(max(0.0, min(30.0, p["mem"] + r.uniform(-.05, .05))), 2)   # memory drifts
             cpu = round(max(0, p["base"] * self.busy / 30 * r.uniform(.3, 1.7)), 1)
             processes.append(dict(pid=p["pid"], user=p["user"], cpu_percent=cpu, memory_percent=p["mem"],
                                   state="R" if cpu > 5 and r.random() < .6 else "S", command=p["command"]))
-        swap_total, swap_used = 4 * 1024 * 1024, 300 * 1024
+        swap_total, swap_used = self.swap_total, int(self.swap_used)
         return {
             "cpu_usage": calculate_cpu_usage(previous_cpu, cur) if previous_cpu else None,
             "cpu_cores": self.cores, "cpu_times": cur,
@@ -250,8 +347,6 @@ class DemoCollector:
 # Application controller
 # ============================================================================
 class Controller:
-    """Collects -> analyses -> publishes ViewStates on a queue, in one background thread."""
-
     def __init__(self, cfg, updates, collect):
         self.cfg, self.updates, self.collect = cfg, updates, collect
         self.engine = AnalyticsEngine(history_size=cfg.history_limit,
@@ -305,10 +400,11 @@ class Controller:
             try:
                 data = self.collect(prev_times) if not isinstance(self.collect, DemoCollector) \
                     else self.collect(prev_times, interval)
+                validate_collector_data(data)
                 dims = cpu_breakdown(prev_times, data.get("cpu_times"))
                 prev_times = data.get("cpu_times")
-                snap = to_snapshot(data, started)
-                result = self.engine.add_snapshot(snap)
+                snap = validate_snapshot(to_snapshot(data, started))
+                result = validate_analytics_result(self.engine.add_snapshot(snap))
                 m = snap.memory
                 self.extras.append(dict(
                     ts=started, load1=snap.cpu.load_averages.one_minute,
@@ -316,8 +412,9 @@ class Controller:
                     used=m.used_bytes / GIB if m.total_bytes else None,
                     free=m.free_bytes / GIB if m.total_bytes else None,
                     cache=max(0, m.total_bytes - m.used_bytes - m.free_bytes) / GIB if m.total_bytes else None))
-                state = to_view_state(snap, result, self.engine.get_history(), list(self.extras),
-                                      self._alerts(result, started), self.cfg, dims)
+                state = validate_view_state(to_view_state(snap, result, self.engine.get_history(),
+                                                          list(self.extras), self._alerts(result, started),
+                                                          self.cfg, dims))
                 self._publish(state)
             except Exception as exc:                        # keep sampling; GUI shows SOURCE ERROR
                 self._publish(SourceError(f"{type(exc).__name__}: {exc}"))
@@ -328,7 +425,10 @@ class Controller:
 # Entry point
 # ============================================================================
 def main():
-    ap = argparse.ArgumentParser(description="LinuxPulse — real-time Linux system monitor")
+    ap = argparse.ArgumentParser(
+        description="LinuxPulse — real-time Linux system monitor",
+        epilog="Default: live data from the real collector. --mock/--demo: synthetic data, labelled "
+               "'DEMO DATA' in the window; never mixed with live measurements.")
     ap.add_argument("--demo", "--mock", dest="demo", action="store_true",
                     help="synthetic data through the same pipeline (any OS); --mock as in README")
     ap.add_argument("--interval", type=float, help="sampling interval in seconds (default: config.py)")
@@ -350,9 +450,19 @@ def main():
         from collector.top_collector import collect_system_data
         collect = collect_system_data
 
+    try:
+        check_interfaces(collect)
+    except IntegrationError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
     warning = tk_version_warning()
     if warning:
         print("WARNING:", warning, file=sys.stderr)
+
+    print(f"LinuxPulse starting — source: {'MOCK (simulated data, not real measurements)' if demo else 'LIVE (real collector)'}"
+          f" · interval {cfg.sampling_interval_seconds:g}s · history {cfg.history_limit} samples"
+          f" · queue {cfg.queue_capacity} · close the window to exit")
 
     updates = queue.Queue(maxsize=cfg.queue_capacity)
     controller = Controller(cfg, updates, collect).start()

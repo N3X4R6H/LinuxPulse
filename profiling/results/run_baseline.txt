@@ -1,0 +1,23 @@
+# LinuxPulse C++ benchmark run (NOT the Python dashboard)
+date:      2026-11-11T15:09:15+05:30
+host:      Linux 7.2.8-9-omarchy x86_64
+cpu:       Intel(R) Core(TM) Ultra 5 226V
+compiler:  g++ (GCC) 16.2.1 20260810
+gprof:     GNU gprof (GNU Binutils) 2.47
+flags:     -std=c++17 -O0 -pg (profiled); -O0 (plain, for timing)
+arguments: --size 100 --seed 123456789 --impl baseline
+
+## Instrumented run (-pg), produces gmon.out
+size=100 seed=123456789 impl=baseline series_len=200000 window=200 snapshots=2000 procs=250 cores=64 core_samples=2000
+RESULT stats mean=50.046225 stddev=28.852248 min=0.00 max=99.99 median=50.06
+RESULT rolling sum=10008906.715543 last=50.679700
+RESULT ranking checksum=44994541
+RESULT aggregate mean=50.045783
+TIME stats=0.1405 rolling=1.5446 ranking_phase=9.1600 ranking_only=6.7716 aggregate=0.0077 total=10.8528
+
+## Un-instrumented timing (-O0 without -pg), 5 runs, same arguments
+run 1: TIME stats=0.0576 rolling=0.2351 ranking_phase=1.1287 ranking_only=0.8431 aggregate=0.0027 total=1.4241
+run 2: TIME stats=0.0500 rolling=0.2342 ranking_phase=1.1026 ranking_only=0.8238 aggregate=0.0026 total=1.3894
+run 3: TIME stats=0.0577 rolling=0.2480 ranking_phase=1.1135 ranking_only=0.8324 aggregate=0.0026 total=1.4218
+run 4: TIME stats=0.0583 rolling=0.2340 ranking_phase=1.2759 ranking_only=0.9588 aggregate=0.0071 total=1.5753
+run 5: TIME stats=0.1305 rolling=0.4808 ranking_phase=1.2263 ranking_only=0.9129 aggregate=0.0026 total=1.8402

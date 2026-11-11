@@ -279,8 +279,10 @@ linuxpulse/
 │   └── plots.py
 │
 ├── scripts/
-│   ├── launch.sh
-│   └── profile.sh
+│   ├── check_env.sh
+│   ├── profile.sh
+│   ├── compare_profiles.sh
+│   └── (launch.sh — planned, Member 1)
 │
 ├── tests/
 │   ├── __init__.py
@@ -288,7 +290,9 @@ linuxpulse/
 │   ├── test_collector.py
 │   ├── test_analytics.py
 │   ├── test_visualization.py
-│   └── test_integration.py
+│   ├── test_controller.py
+│   ├── test_integration.py
+│   └── test_gui_integration.py
 │
 ├── profiling/
 │   ├── README.md
@@ -306,7 +310,7 @@ linuxpulse/
 │   ├── testing_strategy.md
 │   ├── performance_analysis.md
 │   ├── report.tex
-│   └── presentation.tex
+│   ├── presentation.tex
 │
 └── assets/
     └── screenshots/
@@ -333,10 +337,10 @@ Required tools:
 For Arch Linux / Omarchy:
 
 ```bash
-sudo pacman -S python python-pip tk gcc make gprof
+sudo pacman -S python python-pip tk gcc make binutils procps-ng
 ```
 
-If the `gprof` package name differs in your configured repositories, install the package providing GNU gprof (commonly available through `binutils`).
+`gprof` ships in `binutils` on Arch (there is no separate `gprof` package); `top` comes from `procps-ng`.
 
 ### Clone the Repository
 
@@ -359,6 +363,15 @@ source .venv/bin/activate
 ```bash
 pip install -r requirements.txt
 ```
+
+### Quick Setup with Make
+
+```bash
+make install   # creates .venv, installs requirements.txt (never calls sudo)
+make check     # verifies Python, Tkinter, NumPy, Matplotlib, gcc, gprof, top, make
+```
+
+See `docs/setup.md` for Arch / Omarchy notes.
 
 ### Verify the Environment
 
@@ -389,12 +402,14 @@ Launch LINUXPULSE using:
 python main.py
 ```
 
-Alternatively, use the project launcher:
+Alternatively, use the launcher that creates the virtual environment for you:
 
 ```bash
-chmod +x scripts/launch.sh
-./scripts/launch.sh
+./run.sh            # live data      (./run.sh --mock for simulated data)
 ```
+
+(`scripts/launch.sh` is planned by Member 1 and is not in the repository yet; `make run` / `make mock`
+and `./run.sh` are the supported launch paths.)
 
 ### Mock Monitoring Mode
 
