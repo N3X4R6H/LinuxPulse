@@ -60,3 +60,5 @@ dist/
 .ruff_cache/
 *.tmp
 profiling/cpp_benchmark/benchmark_plain
+
+script.md

@@ -223,8 +223,8 @@ MEMBERS = [               # (name, roll number) — fill in
     ("Ankush Tarafdar", "MC25BT011"),
     ("Atharv Saxena", "CS25BT004"),
     ("Manish Pravin Patil", "MC25BT028"),
-    ("Dhiren Chettupelly", "MC25BT005"),
-    ("Pavan Nandan Gudipudi", "MC25BT004"),
+    ("Chettupelly Dhiren", "MC25BT005"),
+    ("Pavan", "MC25BT004"),
 ]
 WEBSITE = "https://github.com/N3X4R6H/LinuxPulse.git"   # e.g. "https://github.com/<user>/<repo>" — becomes a clickable link
 

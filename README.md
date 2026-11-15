@@ -692,7 +692,3 @@ A formal open-source license can be added by the project maintainers.
   <strong>LINUXPULSE</strong><br/>
   <i>Monitor. Analyze. Optimize.</i>
 </p>
-
-[![Architecture diagram of n3x4r6h/linuxpulse](https://gitdiagram.com/n3x4r6h/linuxpulse/diagram.png)](https://gitdiagram.com/n3x4r6h/linuxpulse?utm_source=readme&utm_medium=picture)
-
-[![Architecture diagram](https://gitdiagram.com/diagram-badge.svg)](https://gitdiagram.com/n3x4r6h/linuxpulse?utm_source=readme&utm_medium=badge)

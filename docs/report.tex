@@ -1,50 +1,26 @@
 \documentclass[11pt,a4paper]{article}
 
-% ------------------------------------------------------------
 % LinuxPulse project report
-% Compile from the repository root with:
-%   pdflatex docs/report.tex
-% ------------------------------------------------------------
+% compile with: pdflatex report.tex (from docs/) or pdflatex docs/report.tex (from the main folder)
 
-\usepackage[a4paper,margin=25mm]{geometry}
-\usepackage[T1]{fontenc}
-\usepackage{lmodern}
-\usepackage{microtype}
+\usepackage[margin=25mm]{geometry}
 \usepackage{graphicx}
 \usepackage{float}
 \usepackage{booktabs}
-\usepackage{array}
 \usepackage{enumitem}
-\usepackage{xcolor}
-\usepackage{hyperref}
 \usepackage{listings}
-\usepackage{caption}
+\usepackage[colorlinks=true]{hyperref}
 
-\hypersetup{
-    colorlinks=true,
-    linkcolor=blue!55!black,
-    urlcolor=blue!55!black,
-    citecolor=blue!55!black,
-    pdftitle={LinuxPulse Project Report},
-    pdfauthor={LinuxPulse Team}
-}
+% screenshots are found from both the docs folder and the main folder
+\graphicspath{{../assets/screenshots/}{assets/screenshots/}}
 
-\setlength{\parskip}{0.45em}
+\setlength{\parskip}{0.5em}
 \setlength{\parindent}{0pt}
-\setlist[itemize]{leftmargin=1.5em,itemsep=0.2em}
-\setlist[enumerate]{leftmargin=1.7em,itemsep=0.2em}
 
-\definecolor{codegray}{RGB}{245,246,248}
-\lstset{
-    basicstyle=\ttfamily\small,
-    backgroundcolor=\color{codegray},
-    frame=single,
-    breaklines=true,
-    columns=fullflexible
-}
+\lstset{basicstyle=\ttfamily\small, frame=single, breaklines=true}
 
 \title{\textbf{LinuxPulse}\\
-\large Real-Time System Monitoring Dashboard}
+\large Real-Time Linux System Monitoring \& Performance Analytics Dashboard}
 \author{Team: Mentally Unstable\\[0.4em]
 \textit{Project Report}}
 \date{November 2026}
@@ -54,12 +30,15 @@
 
 \begin{abstract}
 LinuxPulse is a desktop system-monitoring application that collects operating-system
-telemetry and presents it through a graphical dashboard. It provides live views of
-CPU, memory, swap, system load, processes, historical measurements, and resource
-alerts. This report describes the project at a system level, documents the
-visualization work and its verification, and reserves a section for an additional
-team member's contribution.
+measurements and presents them in a graphical dashboard. It provides live views of
+CPU, memory, swap, system load and processes, together with historical charts,
+summary statistics and threshold alerts. This report describes the system
+architecture, documents the visualization work and its verification, summarizes
+the automated tests and the C++ profiling experiment, and lists the contribution
+of each team member.
 \end{abstract}
+
+\newpage
 
 \tableofcontents
 \newpage
@@ -71,9 +50,9 @@ resource utilization and identify processes that may be consuming excessive
 resources. LinuxPulse brings selected measurements together in a single desktop
 interface and updates the displayed information periodically.
 
-The application was run and verified on a MacBook running macOS (Darwin,
-arm64). The project also includes platform-aware collection support for Linux
-and macOS.
+LinuxPulse is designed for Linux, and its collector also supports macOS. The
+application was run and verified on a MacBook running macOS (Darwin, arm64) and on
+an x86\_64 Linux machine running Arch-based Omarchy.
 
 \subsection{Objectives}
 
@@ -86,7 +65,9 @@ The main objectives of LinuxPulse are:
           dashboard views.
     \item Identify threshold violations and present alerts to the user.
     \item Handle unavailable or incomplete measurements without treating
-          missing values as valid zero measurements.
+          missing values as zero.
+    \item Read system information only: the application never terminates or
+          modifies a process.
 \end{itemize}
 
 \section{System Overview and Architecture}
@@ -96,26 +77,40 @@ LinuxPulse is organized into components with distinct responsibilities.
 \begin{description}[style=nextline]
     \item[Collector]
     Obtains system measurements and process information from the host operating
-    system using platform-specific collection paths.
+    system. On Linux it reads \texttt{/proc/stat}, \texttt{/proc/meminfo} and
+    \texttt{/proc/loadavg}, and takes the process list from \texttt{top} in batch
+    mode, with \texttt{ps} as a fallback. On macOS it uses \texttt{sysctl},
+    \texttt{vm\_stat} and \texttt{ps}.
 
     \item[Parser]
     Interprets command output and system data, converting it into structured
     values for downstream processing.
 
-    \item[Analytics]
-    Maintains bounded measurement history, calculates averages and peaks,
-    identifies top resource-consuming processes, and evaluates alert thresholds.
+    \item[Controller]
+    \texttt{main.py} runs collection and analytics in a background thread, builds
+    snapshots, and passes the latest dashboard state to the GUI through a bounded,
+    thread-safe queue. It can also replace the real collector with a demo data
+    source (\texttt{--mock}), which the window labels as demo data.
 
-    \item[Models]
-    Provides structured representations used to pass system and analytics data
-    through the application.
+    \item[Analytics]
+    Keeps a bounded history of the last 300 samples, calculates current, mean,
+    minimum, peak and rolling-average values, identifies the top
+    resource-consuming processes, and raises an alert when CPU, RAM or swap usage
+    reaches its threshold (80\%, 85\% and 80\% by default).
+
+    \item[Models and configuration]
+    \texttt{models.py} defines the data structures passed between components;
+    \texttt{config.py} holds the sampling interval (2 seconds by default), history
+    size, alert thresholds and queue size.
 
     \item[Visualization]
     Creates and updates Matplotlib figures used to display time-series and
     resource-utilization information.
 
     \item[GUI]
-    Presents overview, process, analytics, and project-information views.
+    A Tkinter window with overview, process, analytics, and project-information
+    views. It checks the queue every 250 ms and is the only part of the program
+    that updates widgets and charts.
 
     \item[Launcher]
     The \texttt{run.sh} script prepares the Python virtual environment,
@@ -128,9 +123,10 @@ The overall data flow is:
 \texttt{Operating System}
 $\rightarrow$ \texttt{Collector}
 $\rightarrow$ \texttt{Parser}
-$\rightarrow$ \texttt{Analytics / Models}
-$\rightarrow$ \texttt{Visualization}
+$\rightarrow$ \texttt{Controller}
+$\rightarrow$ \texttt{Analytics}
 $\rightarrow$ \texttt{GUI}
+$\rightarrow$ \texttt{Visualization}
 \end{center}
 
 \section{Technology Stack}
@@ -144,8 +140,10 @@ $\rightarrow$ \texttt{GUI}
 Python & Application and monitoring logic \\
 Tkinter & Desktop graphical user interface \\
 Matplotlib & Charts and data visualization \\
-Standard Python libraries & Data handling, process coordination, and testing \\
-Unix command-line utilities & Platform-specific system data collection \\
+Python standard library & Threading, queues, statistics, and \texttt{unittest} \\
+\texttt{/proc}, \texttt{top}, \texttt{ps} & System data collection on Linux \\
+GNU Make, Bash & Build, test and launch automation \\
+C++, GCC, GNU gprof & Separate profiling benchmark \\
 \bottomrule
 \end{tabular}
 \caption{Principal technologies used by LinuxPulse.}
@@ -162,33 +160,36 @@ for every measurement.
 
 The overview presents current CPU, RAM, and swap utilization, system load,
 monitoring status, and a metrics index. It also includes historical CPU and
-memory charts and a per-core utilization area.
+memory charts and an area reserved for per-core CPU utilization.
 
-The CPU and memory history charts display changes over time. The memory chart
-distinguishes used memory, buffer/cache, and free memory. The dashboard updates
-periodically as new samples are received.
+The CPU history chart is a stacked area chart that divides usage into user,
+system, nice, iowait, irq, softirq, and steal time, and the memory chart
+distinguishes used memory, buffer/cache, and free memory. Both
+charts update as new samples are received.
 
 \subsection{Analytics visualizations}
 
 The analytics view presents average and peak resource measurements, utilization
-history, system load history, top resource consumers, and active alerts. This
-view makes it possible to examine trends over the monitoring interval rather
-than relying only on the latest sample.
+history with a dashed line for the average, system load history, top resource
+consumers, and active alerts. This view makes it possible to examine trends over
+the monitoring period rather than relying only on the latest sample.
 
 \subsection{Handling unavailable measurements}
 
 A measurement may be unavailable on a particular operating system or data
-source. LinuxPulse indicates unavailable per-core CPU data in the interface
-instead of displaying fabricated values. During verification on macOS, the
-dashboard reported that per-CPU data was not provided by the macOS \texttt{top}
-data source. The other dashboard measurements and charts continued to operate.
+source. In that case LinuxPulse shows that the value is unavailable instead of
+displaying an invented value. Per-core CPU data is one example: the collector
+currently reports only total CPU usage, so the per-core areas in the overview
+and analytics views state that per-CPU data is unavailable, on both macOS and
+Linux. The other measurements and
+charts are not affected.
 
 \section{Application Verification}
 
 The integrated application was launched on macOS using the repository's
-\texttt{run.sh} script. The script created a virtual environment and installed
-the dependencies declared in \texttt{requirements.txt}. The dashboard then
-opened and displayed live system information.
+\texttt{run.sh} script. The script created a virtual environment, installed the
+required Python packages, and started the dashboard, which then displayed live
+system information.
 
 \subsection{Functional checks}
 
@@ -206,57 +207,88 @@ The following behavior was visually checked during the application run:
 
 \subsection{Automated tests}
 
-The complete discovered unit-test suite was executed with:
+The full unit-test suite was run with:
 
 \begin{lstlisting}
 python3 -m unittest discover -s tests -v
 \end{lstlisting}
 
-The run completed successfully with 55 tests passing and no failures.
+The last run (15 November 2026, on Linux) completed with 120 tests passing and
+no failures. An earlier run during the macOS verification covered the first four
+test files (55 tests); the controller and integration test files were added later.
 
 \begin{table}[H]
 \centering
 \begin{tabular}{lr}
 \toprule
-\textbf{Test area} & \textbf{Tests passed} \\
+\textbf{Test file} & \textbf{Tests passed} \\
 \midrule
-Analytics & 21 \\
-Collector & 10 \\
-Parser & 20 \\
-Visualization & 4 \\
+\texttt{test\_parser.py} & 20 \\
+\texttt{test\_collector.py} & 10 \\
+\texttt{test\_analytics.py} & 21 \\
+\texttt{test\_visualization.py} & 4 \\
+\texttt{test\_controller.py} & 32 \\
+\texttt{test\_integration.py} & 29 \\
+\texttt{test\_gui\_integration.py} & 4 \\
 \midrule
-\textbf{Total} & \textbf{55} \\
+\textbf{Total} & \textbf{120} \\
 \bottomrule
 \end{tabular}
 \caption{Automated test results from the integrated project.}
 \end{table}
 
-\textit{Note:} The test counts above reflect the successful test run recorded
-during project verification.
+\subsection{Performance profiling}
+
+Profiling was done on a separate C++ benchmark
+(\texttt{profiling/cpp\_benchmark/benchmark.cpp}) that performs the same kind of
+work as the analytics engine on synthetic data. This benchmark is separate from
+the Python dashboard, because GNU gprof cannot profile Python code. It was compiled
+with \texttt{g++ -O0 -pg}, run once to produce \texttt{gmon.out}, and analyzed
+with \texttt{gprof}. The timings below come from a build without \texttt{-pg}
+(median of 5 runs).
+
+The call graph showed that \texttt{top\_processes} used 43.7\% of the run time,
+because it copied and fully sorted every process to keep only the top five.
+Replacing this with \texttt{std::partial\_sort} on an array of indices produced
+the same output with the following times:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrrr}
+\toprule
+ & \textbf{Before} & \textbf{After} & \textbf{Speed-up} \\
+\midrule
+Ranking calls & 0.843 s & 0.042 s & 20.1x \\
+Whole program & 1.424 s & 0.603 s & 2.36x \\
+\bottomrule
+\end{tabular}
+\caption{C++ benchmark before and after the optimization.}
+\end{table}
+
+Full results are in \texttt{profiling/results/} and \texttt{docs/performance\_analysis.md}.
 
 \section{Screenshots}
 
-The repository contains screenshots of the integrated application. The
-following figures are included when the report is compiled from the repository
-root and the image files are present under \texttt{assets/screenshots/}.
+The screenshots below were taken from the integrated application running in
+demo-data mode. They are stored in \texttt{assets/screenshots/}.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=\textwidth]{assets/screenshots/overview.png}
+    \includegraphics[width=\textwidth]{overview.png}
     \caption{LinuxPulse overview dashboard.}
     \label{fig:overview}
 \end{figure}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=\textwidth]{assets/screenshots/processes.png}
+    \includegraphics[width=\textwidth]{processes.png}
     \caption{Process monitoring view.}
     \label{fig:processes}
 \end{figure}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=\textwidth]{assets/screenshots/analytics.png}
+    \includegraphics[width=\textwidth]{analytics.png}
     \caption{Analytics and historical utilization view.}
     \label{fig:analytics}
 \end{figure}
@@ -264,26 +296,44 @@ root and the image files are present under \texttt{assets/screenshots/}.
 \section{Limitations and Future Improvements}
 
 The availability and detail of system measurements depend on the operating
-system and the underlying collection utility. In the macOS verification run,
-per-core CPU measurements were unavailable from the selected data source.
-Potential future improvements include:
+system and the underlying collection utility. The collector currently reports
+only total CPU usage, so per-core CPU measurements are not available on any
+platform. Potential future improvements include:
 \begin{itemize}
-    \item Adding or evaluating a platform-specific source for per-core CPU data
-          on macOS.
+    \item Collecting per-core CPU data (for example, from the per-CPU lines in
+          \texttt{/proc/stat} on Linux).
     \item Expanding integration and cross-platform testing.
     \item Evaluating dashboard responsiveness and memory use during longer
           monitoring sessions.
-    \item Improving the presentation of unavailable measurements and collection
-          errors where appropriate.
+    \item Improving how unavailable measurements and collection errors are
+          shown.
+    \item Exporting the monitoring history to CSV.
 \end{itemize}
 
 \section{Team Contributions}
 
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{tabular}{lll}
+\toprule
+\textbf{Member} & \textbf{Role} & \textbf{Main files} \\
+\midrule
+Atharv Saxena & System Data Acquisition & \texttt{top\_collector.py}, \texttt{parser.py} \\
+Manish Pravin Patil & Analytics and Performance Metrics & \texttt{engine.py} \\
+Chettupelly Dhiren & GUI and Application Interface & \texttt{dashboard.py}, \texttt{process\_table.py} \\
+Pavan & Visualization and Quality Assurance & \texttt{plots.py}, tests, report \\
+Ankush Tarafdar & Systems Architect, Integration and Profiling & \texttt{main.py}, \texttt{models.py}, \texttt{config.py} \\
+\bottomrule
+\end{tabular}
+\caption{Team roles.}
+\end{table}
+
 \subsection{Visualization and verification}
 
-\textbf{Contributor: Pavan Nandan Gudipudi}
+\textbf{Contributor: Pavan}
 
-Work covered the visualization component and its verification, including:
+This work covered the visualization component and its verification, including:
 \begin{itemize}
     \item Implementing Matplotlib-based system monitoring plots.
     \item Supporting CPU, RAM, and swap history visualization.
@@ -296,37 +346,14 @@ Work covered the visualization component and its verification, including:
           automated test suite.
 \end{itemize}
 
-\subsection{Additional team member contribution --- placeholder}
-
-% ============================================================
-% PLACEHOLDER FOR THE OTHER TEAM MEMBER:
-% Replace the prompts below with their name, responsibility,
-% implementation details, and testing/results. Keep this
-% section until their contribution has been added.
-% ============================================================
-
-\textbf{Contributor:} \textit{[Add name]}
-
-\textbf{Area of responsibility:} \textit{[Add module or responsibility]}
-
-\textbf{Work completed:}
-\begin{itemize}
-    \item \textit{[Describe the implementation or assigned work.]}
-    \item \textit{[Describe relevant design decisions or features.]}
-    \item \textit{[Describe tests, validation, or results.]}
-\end{itemize}
-
-\textbf{Evidence / references:} \textit{[Add relevant files, figures, commits,
-or test results.]}
-
 \section{Conclusion}
 
-LinuxPulse brings system collection, parsing, analytics, visualization, and a
-desktop interface together in one application. During the recorded macOS
-verification, the overview, processes, analytics, and project-information
-views operated, and the automated test suite completed with 55 passing tests.
-The project provides a foundation for real-time system monitoring while
-retaining explicit handling for measurements that are unavailable from a
-particular platform data source.
+LinuxPulse brings system data collection, parsing, analytics, visualization, and
+a desktop interface together in one application. All four views (overview,
+processes, analytics, and project information) worked during verification, all
+120 automated tests pass, and the C++ profiling experiment made process ranking
+20 times faster. The project provides a foundation for real-time system
+monitoring and clearly marks measurements that are unavailable on a given
+platform.
 
 \end{document}
